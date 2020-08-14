@@ -1,12 +1,14 @@
-require 'chronicle/etl/transformers/transformer'
+require 'chronicle/etl'
+require 'mail'
 
 module Chronicle
   module Email
-    class ChronicleTransformer < Chronicle::Etl::Transformers::Transformer
+    class ChronicleTransformer < Chronicle::Etl::Transformer
       def transform data
-        message = Mail.new(data)
-        return {
-          data: message.date,
+        message = Mail.new(data.b)
+
+        {
+          date: message.date,
           id: message.message_id,
           title: message.subject
         }

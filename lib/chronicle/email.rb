@@ -1,9 +1,9 @@
 require "chronicle/email/version"
 require "chronicle/email/chronicle_transformer"
+require "chronicle/email/mbox_extractor"
 
 module Chronicle
   module Email
-    class Error < StandardError; end
-    # Your code goes here...
+    PROVIDER_NAME = "email"
   end
 end
