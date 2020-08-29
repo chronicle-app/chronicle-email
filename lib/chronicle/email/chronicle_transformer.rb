@@ -5,9 +5,9 @@ require 'email_reply_parser'
 
 module Chronicle
   module Email
-    class ChronicleTransformer < Chronicle::Etl::Transformer
-      def transform data
-        message = Mail.new(data.b)
+    class ChronicleTransformer < Chronicle::ETL::Transformer
+      def transform
+        message = Mail.new(@data.b)
         build_messaged(message)
       end
 

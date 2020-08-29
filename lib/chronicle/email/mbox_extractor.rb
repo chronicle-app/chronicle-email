@@ -4,7 +4,7 @@ require 'tempfile'
 
 module Chronicle
   module Email
-    class MboxExtractor < Chronicle::Etl::Extractor
+    class MboxExtractor < Chronicle::ETL::Extractor
       # mbox format is a bunch of emails concatanated together, separated
       # by a line that starts with "From "
       NEW_EMAIL_REGEX = Regexp.new('^From [^\s]+ .{24}')
