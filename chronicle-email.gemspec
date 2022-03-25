@@ -36,7 +36,7 @@ Gem::Specification.new do |spec|
   spec.executables   = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
 
-  spec.add_dependency "chronicle-etl", "~> 0.4.4"
+  spec.add_dependency "chronicle-etl", "~> 0.5"
   spec.add_dependency "mail", "~> 2.7"
   spec.add_dependency 'email_reply_parser', '~> 0.5'
   spec.add_dependency 'reverse_markdown', '~> 2.0'
