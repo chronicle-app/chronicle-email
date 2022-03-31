@@ -51,7 +51,7 @@ module Chronicle
       end
 
       def fetch_message(message_id)
-        response = @connection.fetch(3100020, "BODY.PEEK[]")
+        response = @connection.fetch(message_id, "BODY.PEEK[]")
         raise(Chronicle::ETL::ExtractionError, "Error loading message") unless response
 
         return response[0]
