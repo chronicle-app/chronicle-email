@@ -45,7 +45,9 @@ module Chronicle
 
       def fetch_message_ids
         keys = gmail_mode? ? search_keys_gmail : search_keys_default
-        @connection.search(keys)
+        message_ids = @connection.search(keys)
+        message_ids = message_ids.first(@config.limit) if @config.limit
+        message_ids
       rescue Net::IMAP::BadResponseError => e
         raise(Chronicle::ETL::ExtractionError, "Error searching IMAP server for messages")
       end
