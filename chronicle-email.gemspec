@@ -36,10 +36,14 @@ Gem::Specification.new do |spec|
   spec.executables   = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
 
-  spec.add_dependency "chronicle-etl", "~> 0.5"
-  spec.add_dependency "mail", "~> 2.7"
   spec.add_dependency 'email_reply_parser', '~> 0.5'
   spec.add_dependency 'reverse_markdown', '~> 2.0'
+  spec.add_dependency "chronicle-etl", "~> 0.5"
+  spec.add_dependency "mail", "~> 2.7"
+  # Needed for Ruby 3.1 compatibility (https://github.com/mikel/mail/pull/1439#issuecomment-1002801221)
+  # TODO: check back for new version of `mail`
+  spec.add_dependency "net-imap"
+  spec.add_dependency "net-smtp"
 
   spec.add_development_dependency "bundler", "~> 2.1"
   spec.add_development_dependency "rake", "~> 13.0"
