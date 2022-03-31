@@ -85,14 +85,16 @@ module Chronicle
       end
 
       def clean_body message
-        # FIXME: this all needs to be refactored
-
+        # FIXME: this all needs to be refactored        
         if message.multipart?
           body = message.text_part&.decoded rescue Mail::UnknownEncodingType
         else
           body = message.body&.decoded rescue Mail::UnknownEncodingType
           body = body_to_markdown if @config.body_as_markdown
         end
+
+        return if body == Mail::UnknownEncodingType
+        return unless body && body != ""
 
         body = body_without_signature(body) if @config.remove_signature
 
@@ -107,8 +109,6 @@ module Chronicle
       end
 
       def body_without_signature(body)
-        return unless body && body != ""
-
         # FIXME: regex in EmailReplyParse gem seems to get into infinite loops
         #   with certain long bodies that have binary data
         parsed_body = Timeout::timeout(5) do
