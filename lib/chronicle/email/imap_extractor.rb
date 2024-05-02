@@ -1,12 +1,14 @@
 require 'net/imap'
+require 'mail'
 
 module Chronicle
   module Email
     class IMAPExtractor < Chronicle::ETL::Extractor
       register_connector do |r|
-        r.provider = 'email'
-        r.description = 'imap server'
-        r.identifier = 'imap'
+        r.source = :email
+        r.type = :message
+        r.strategy = :imap
+        r.description = 'IMAP server'
       end
 
       setting :host, required: true, default: 'imap.gmail.com'
@@ -28,7 +30,15 @@ module Chronicle
       def extract
         @message_ids.each do |message_id|
           message = fetch_message(message_id)
-          yield Chronicle::ETL::Extraction.new(data: { email: message.attr["BODY[]"]} )
+          email = Mail.new(message.attr['BODY[]'])
+          data = {
+            raw: email,
+            time: email.date&.to_time,
+            subject: email.subject,
+            from: email&.from&.join(', '),
+            to: email&.to&.join(', ')
+          }
+          yield build_extraction(data:)
         end
       end
 
@@ -39,8 +49,8 @@ module Chronicle
         connection.login(@config.username, @config.password)
         connection.select(@config.mailbox)
         connection
-      rescue Net::IMAP::NoResponseError => e
-        raise(Chronicle::ETL::ExtractionError, "Error connecting to IMAP server. Please check username and password")
+      rescue Net::IMAP::NoResponseError
+        raise(Chronicle::ETL::ExtractionError, 'Error connecting to IMAP server. Please check username and password')
       end
 
       def fetch_message_ids
@@ -48,24 +58,23 @@ module Chronicle
         message_ids = @connection.search(keys)
         message_ids = message_ids.first(@config.limit) if @config.limit
         message_ids
-      rescue Net::IMAP::BadResponseError => e
-        raise(Chronicle::ETL::ExtractionError, "Error searching IMAP server for messages")
+      rescue Net::IMAP::BadResponseError
+        raise(Chronicle::ETL::ExtractionError, 'Error searching IMAP server for messages')
       end
 
       def fetch_message(message_id)
-        response = @connection.fetch(message_id, "BODY.PEEK[]")
-        raise(Chronicle::ETL::ExtractionError, "Error loading message") unless response
+        response = @connection.fetch(message_id, 'BODY.PEEK[]')
+        raise(Chronicle::ETL::ExtractionError, 'Error loading message') unless response
 
-        return response[0]
+        response[0]
       end
 
       def search_keys_gmail
         # Gmail offers an extension to IMAP that lets us use gmail queries
-        q = ""
 
         # First, we ignore drafts beacuse they break a lot of assumptions we
         # make when when processing emails (lack of timestamps, ids, etc)
-        q = "-label:draft"
+        q = '-label:draft'
 
         # We use UNIX timestamps in gmail filters which let us do more precise
         # since/until compared with date-based imap filters
@@ -73,14 +82,14 @@ module Chronicle
         q += " before:#{@config.until.to_i}" if @config.until
         q += " #{@config.search_query}" if @config.search_query
 
-        ["X-GM-RAW", q]
+        ['X-GM-RAW', q]
       end
 
       def search_keys_default
         keys = []
         # TODO: test out non-gmail IMAP searching (for @config.search_query)
         keys += ['SINCE', Net::IMAP.format_date(@config.since)] if @config.since
-        keys += ['BEFORE', Net::IMAP.format_date(@config.until)] if @config.until
+        keys + ['BEFORE', Net::IMAP.format_date(@config.until)] if @config.until
       end
 
       def gmail_mode?

@@ -6,9 +6,10 @@ module Chronicle
   module Email
     class MboxExtractor < Chronicle::ETL::Extractor
       register_connector do |r|
-        r.provider = 'email'
+        r.source = :email
+        r.type = :message
+        r.strategy = :mbox
         r.description = 'an .mbox file'
-        r.identifier = 'mbox'
       end
 
       setting :input, required: true
@@ -40,14 +41,20 @@ module Chronicle
         #
         # TODO: make this thread-safe (one tmp file per email?)
         file.each do |line|
-          if line =~ NEW_EMAIL_REGEX
-            if File.size(tmp) > 0
-              tmp.rewind
-              email = tmp.read
-              yield Chronicle::ETL::Extraction.new(data: { email: email} )
-              tmp.truncate(0)
-              tmp.rewind
-            end
+          if line =~ (NEW_EMAIL_REGEX) && File.size(tmp).positive?
+            tmp.rewind
+
+            email = Mail.new(tmp.read)
+            data = {
+              raw: email,
+              time: email.date&.to_time,
+              subject: email.subject,
+              from: email&.from&.join(', '),
+              to: email&.to&.join(', ')
+            }
+            yield build_extraction(data:)
+            tmp.truncate(0)
+            tmp.rewind
           end
           tmp.write(line)
         end

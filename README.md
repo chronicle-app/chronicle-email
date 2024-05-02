@@ -21,11 +21,11 @@ $ chronicle-etl secrets:set imap username foo@gmail.com
 $ chronicle-etl secrets:set imap password APPPASSWORD
 
 # Then, retrieve your email from the last five days
-$ chronicle-etl --extractor email:imap --transformer email --since 5d --loader json
+$ chronicle-etl --extractor email:imap --schema chronicle --since 5d
 
 # If you don't want to save your credentials as a secret, you can just pass
 # them to the extractor directly
-$ chronicle-etl --extractor email:imap --transformer email --since 5d --loader json \
+$ chronicle-etl --extractor email:imap --schema chronicle --since 5d --loader json \
     --extractor-opts username:foo@gmail.com --password:APPPASSWORD
 ```
 
@@ -34,7 +34,7 @@ The MBOX format is used to archive an email mailbox. [Google Takeout](https://ta
 
 ```sh
 # Retrieve the subject lines of all emails in test.mbox
-$ chronicle-etl --extractor email:mbox --input inbox.mbox --transformer email --fields subject
+$ chronicle-etl --extractor email:mbox --input ~/Downloads/inbox.mbox --fields subject
 ```
 
 ## Available Connectors

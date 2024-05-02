@@ -1,5 +1,5 @@
 require 'chronicle/etl'
-require 'mail'
+require 'chronicle/models'
 require 'timeout'
 require 'email_reply_parser'
 require 'reverse_markdown'
@@ -8,98 +8,97 @@ module Chronicle
   module Email
     class EmailTransformer < Chronicle::ETL::Transformer
       register_connector do |r|
+        r.source = :email
+        r.type = :message
         r.description = 'an email object'
-        r.provider = 'email'
-        r.identifier = 'email'
+        r.from_schema = :extraction
+        r.to_schema = :chronicle
       end
 
       setting :body_as_markdown, default: false
       setting :remove_signature, default: true
 
-      def transform
-        build_messaged
-      end
-
-      def id
-        message.message_id || raise(Chronicle::ETL::UntransformableRecordError, "Email doesn't have an ID")
-      end
-
-      def timestamp
-        message.date&.to_time || raise(Chronicle::ETL::UntransformableRecordError, "Email doesn't have a timestamp")
+      def transform(record)
+        build_messaged(record.data[:raw])
       end
 
       private
 
-      def message
-        @message ||= Mail.new(@extraction.data[:email])
+      def build_messaged(email)
+        timestamp = email.date&.to_time || raise(Chronicle::ETL::UntransformableRecordError,
+          "Email doesn't have a timestamp")
+
+        email.message_id || raise(Chronicle::ETL::UntransformableRecordError, "Email doesn't have an ID")
+
+        Chronicle::Models::CommunicateAction.new do |r|
+          r.end_time = timestamp
+          r.agent = build_agent(email[:from])
+          r.source = 'email'
+          r.source_id = email.message_id
+          r.object = build_message(email)
+        end
       end
 
-      def build_messaged
-        record = ::Chronicle::ETL::Models::Activity.new
-        record.verb = 'messaged'
-        record.provider = 'email'
-        record.provider_id = id
-        record.end_at = timestamp
+      def build_agent(from)
+        raise(Chronicle::ETL::UntransformableRecordError, "Can't determine email sender") unless from&.addrs&.any?
 
-        record.dedupe_on << [:verb, :provider, :provider_id]
-
-        record.actor = build_actor
-        record.involved = build_message
-        record
+        build_person(from.addrs.first)
       end
 
-      def build_actor
-        # sometimes From: fields are malformed and we can't build an
-        # actor out of it.
-        raise(Chronicle::ETL::UntransformableRecordError, "Can't determine email sender") unless message[:from]&.addrs&.any?
+      def build_message(email)
+        Chronicle::Models::Message.new do |r|
+          r.name = clean_subject(email.subject)
+          r.text = clean_body(email)
+          r.source = 'email'
+          r.source_id = email.message_id
 
-        record = ::Chronicle::ETL::Models::Entity.new
-        record.represents = 'identity'
-        record.provider = 'email'
-        record.slug = message[:from].addrs.first.address
-        record.title = message[:from].addrs.first.display_name
+          r.recipient = email[:to]&.addrs&.map { |addr| build_person(addr) }
 
-        record.dedupe_on << [:represents, :provider, :slug]
+          # TODO: handle email references
+          # TODO: handle email account owner
+          # TODO: handle attachments
 
-        record
+          r.dedupe_on << %i[source source_id type]
+        end
       end
 
-      def build_message
-        record = ::Chronicle::ETL::Models::Entity.new
-        record.represents = 'message'
-        record.title = clean_subject(message.subject)
-        record.body = clean_body(message)
-        record.provider = 'email'
-        record.provider_id = id
-
-        # TODO: handle consumer
-        # TODO: handle email references
-        # TODO: handle email account owner
-        # TODO: handle attachments
-
-        record
+      def build_person(addr)
+        Chronicle::Models::Person.new do |r|
+          r.source = 'email'
+          r.slug = addr.address
+          r.name = addr.display_name
+          r.dedupe_on << %i[represents provider slug]
+        end
       end
 
       def clean_subject(subject)
-        subject&.encode("UTF-8", invalid: :replace, undef: :replace)
+        subject&.encode('UTF-8', invalid: :replace, undef: :replace)
       end
 
-      def clean_body message
-        # FIXME: this all needs to be refactored        
+      def clean_body(message)
+        # FIXME: this all needs to be refactored
         if message.multipart?
-          body = message.text_part&.decoded rescue Mail::UnknownEncodingType
+          body = begin
+            message.text_part&.decoded
+          rescue StandardError
+            Mail::UnknownEncodingType
+          end
         else
-          body = message.body&.decoded rescue Mail::UnknownEncodingType
+          body = begin
+            message.body&.decoded
+          rescue StandardError
+            Mail::UnknownEncodingType
+          end
           body = body_to_markdown if @config.body_as_markdown
         end
 
         return if body == Mail::UnknownEncodingType
-        return unless body && body != ""
+        return unless body && body != ''
 
         body = body_without_signature(body) if @config.remove_signature
 
         # Force UTF-8 encoding
-        body.encode("UTF-8", invalid: :replace, undef: :replace)
+        body.encode('UTF-8', invalid: :replace, undef: :replace)
       end
 
       def body_to_markdown(body)
@@ -111,11 +110,11 @@ module Chronicle
       def body_without_signature(body)
         # FIXME: regex in EmailReplyParse gem seems to get into infinite loops
         #   with certain long bodies that have binary data
-        parsed_body = Timeout::timeout(5) do
+        Timeout.timeout(5) do
           EmailReplyParser.parse_reply(body)
         end
-      rescue Timeout::Error, StandardError => e
-        return body
+      rescue Timeout::Error, StandardError
+        body
       end
     end
   end
